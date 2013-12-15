@@ -110,6 +110,7 @@ public class ConcurrentCollection<E> implements Collection<E> {
                 } else {
                     // cas failed, others are mutating in this area,
                     //start from the beginning.
+                    //TODO, this is wrong, might skip a node: could safely retry from prev node as starting point
                     node = head.next;
 
                 }
