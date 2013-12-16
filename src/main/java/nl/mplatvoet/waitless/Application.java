@@ -8,21 +8,24 @@ import org.slf4j.LoggerFactory;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.*;
 
 public class Application {
     private static final Logger log = LoggerFactory.getLogger(Application.class);
+    private static final ThreadPoolExecutor service = new ThreadPoolExecutor(4, 4, 1, TimeUnit.DAYS, new LinkedBlockingQueue<Runnable>(50));
 
-    public static final int LENGTH = 100000;
+    public static final int LENGTH = 1000000;
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) throws Exception {
         for (int i = 0; i < 3; ++i) {
             runTests();
         }
+
+        service.shutdown();
+        service.awaitTermination(1, TimeUnit.DAYS);
     }
 
-    public static void runTests() throws InterruptedException {
+    public static void runTests() throws Exception {
         log.info("run test with ConcurrentCollection");
         Collection<Integer> ints = new ConcurrentCollection<Integer>();
         runTest(ints);
@@ -39,15 +42,6 @@ public class Application {
         ints = new ConcurrentLinkedDeque<Integer>();
         runTest(ints);
 
-//      Yes we know this is slow
-//        log.info("run test with Collections.synchronizedList(LinkedList())");
-//        ints = Collections.synchronizedList(new LinkedList<Integer>());
-//        runTest(ints);
-//        ints = Collections.synchronizedList(new LinkedList<Integer>());
-//        runTest(ints);
-//        ints = Collections.synchronizedList(new LinkedList<Integer>());
-//        runTest(ints);
-
         log.info("run test with new ConcurrentLinkedQueue()");
         ints = new ConcurrentLinkedQueue<Integer>();
         runTest(ints);
@@ -57,37 +51,31 @@ public class Application {
         runTest(ints);
     }
 
-    private static void runTest(Collection<Integer> ints) throws InterruptedException {
+    private static void runTest(Collection<Integer> ints) throws Exception {
+
+        Runnable filler = new IntFiller(LENGTH, ints);
+        Runnable clearer = new IntClearer(LENGTH, ints);
+
         Stopwatch stopwatch = new Stopwatch(log);
+        Future<?> f1 = service.submit(filler);
+        Future<?> f2 = service.submit(filler);
+        f1.get();
+        f2.get();
 
-        Thread t1 = new IntFiller(LENGTH, ints);
-        Thread t2 = new IntFiller(LENGTH, ints);
-        Thread t3 = new IntFiller(LENGTH, ints);
-        Thread t4 = new IntFiller(LENGTH, ints);
-        Thread c1 = new IntClearer(LENGTH, ints);
-        Thread c2 = new IntClearer(LENGTH, ints);
-
-        t1.start();
-        t2.start();
-
-        t1.join();
-        t2.join();
-
-        c1.start();
-        c2.start();
-        t3.start();
-        t4.start();
-
-        c1.join();
-        c2.join();
-        t3.join();
-        t4.join();
+        Future<?> f3 = service.submit(filler);
+        Future<?> f4 = service.submit(filler);
+        Future<?> c1 = service.submit(clearer);
+        Future<?> c2 = service.submit(clearer);
+        f3.get();
+        f4.get();
+        c1.get();
+        c2.get();
 
         stopwatch.elapsed("result #{}", ints.size());
     }
 
 
-    public static class IntFiller extends Thread {
+    public static class IntFiller implements Runnable {
 
         private final int length;
         private final Collection<Integer> col;
@@ -105,7 +93,7 @@ public class Application {
         }
     }
 
-    public static class IntClearer extends Thread {
+    public static class IntClearer implements Runnable {
 
         private final int length;
         private final Collection<Integer> col;
