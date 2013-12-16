@@ -10,11 +10,13 @@ import java.util.Iterator;
 
 public class ConcurrentCollection<E> implements Collection<E> {
     private static final Unsafe UNSAFE = UnsafeProvider.instance();
+    private static final long headOffset = UnsafeProvider.objectFieldOffsetFor(ConcurrentCollection.class, "head");
 
     private volatile Node<E> head = new Node<E>(null);
     private volatile Node<E> tail = head;
 
 
+    //TODO: Handle Zombie tails, endless loops in that case
     public boolean add(@NotNull E value) {
         Node<E> newTail = new Node<E>(value);
         newTail.state = Node.State.MUTATING;
@@ -96,28 +98,60 @@ public class ConcurrentCollection<E> implements Collection<E> {
 
     @Override
     public boolean remove(@NotNull Object obj) {
-        for (Node<E> node = head.next, prev = head; node != null; prev = node, node = node.next) {
+        for (Node<E> prev = head, node = prev.next; node != null; ) {
             if (node.state != Node.State.ZOMBIE && node.value.equals(obj)) {
                 if (prev.casState(Node.State.AVAILABLE, Node.State.MUTATING)) {
-                    if (node.casState(Node.State.AVAILABLE, Node.State.ZOMBIE)) {
-                        prev.next = node.next;
-                        prev.state = Node.State.AVAILABLE;
-                        return true;
+                    if (prev.next == node) {
+                        if (node.casState(Node.State.AVAILABLE, Node.State.ZOMBIE)) {
+                            prev.next = node.next;
+                            prev.state = Node.State.AVAILABLE;
+                            return true;
+                        }
                     } else {
-                        node = head.next;
+                        //link has been broken, reset and start from the beginning
+                        prev = head;
+                        node = prev.next;
                     }
                     prev.state = Node.State.AVAILABLE;
-                } else {
-                    // cas failed, others are mutating in this area,
-                    //start from the beginning.
-                    node = head.next;
-
+                } else if (prev.state == Node.State.ZOMBIE){
+                    //link has been broken, start from the head
+                    prev = head;
+                    node = prev.next;
                 }
+            } else {
+                prev = node;
+                node = node.next;
             }
         }
         return false;
 
     }
+
+    private void removeNode(@NotNull Node<E> node, @NotNull Node<E> prev) {
+        //fast attempt, happy flow
+        if (doRemoveNode(node, prev)) return;
+
+        //let's make that bugger a Zombie node
+        while (node.state != Node.State.ZOMBIE && !doRemoveNode(node, prev)) {
+            if (prev.next != node) {
+                for (prev = head; prev != null && prev.next != node; prev = prev.next) ;
+                if (prev == null) return; //link has been broken, node is no longer in collection
+            }
+        }
+    }
+
+    private boolean doRemoveNode(@NotNull Node<E> node, @NotNull Node<E> prev) {
+        if (prev.casState(Node.State.AVAILABLE, Node.State.MUTATING)) {
+            if (prev.next == node && node.casState(Node.State.AVAILABLE, Node.State.ZOMBIE)) {
+                prev.next = node.next;
+                prev.state = Node.State.AVAILABLE;
+                return true;
+            }
+            prev.state = Node.State.AVAILABLE;
+        }
+        return false;
+    }
+
 
     @Override
     public boolean containsAll(@NotNull Collection<?> c) {
@@ -138,19 +172,19 @@ public class ConcurrentCollection<E> implements Collection<E> {
         }
         if (c.isEmpty()) return false;
 
+        //don't assume by the previous call to empty that therefor this collection will be modified
+        //if it's a concurrent collection too, it might be cleared in the mean time.
+        boolean modified = false;
         for (E e : c) {
-            add(e);
+            modified |= add(e);
         }
-        return true;
+        return modified;
     }
 
     @Override
     public boolean removeAll(@NotNull Collection<?> c) {
         if (c == this) {
-            if (isEmpty()) return false;
-
-            clear();
-            return true; //this is an assumption, but nobody really cares.
+            return clearInternal();
         }
         boolean modified = false;
         for (Object o : c) {
@@ -162,9 +196,10 @@ public class ConcurrentCollection<E> implements Collection<E> {
     @Override
     public boolean retainAll(@NotNull Collection<?> c) {
         if (c.isEmpty()) {
-            boolean empty = isEmpty();
-            clear();
-            return !empty;
+            return clearInternal();
+        }
+        if (c == this) {
+            return false;
         }
 
         boolean modified = false;
@@ -178,15 +213,34 @@ public class ConcurrentCollection<E> implements Collection<E> {
 
     @Override
     public void clear() {
-        head = new Node<E>(null);
+        clearInternal();
+    }
+
+    private boolean clearInternal() {
+        while (true) {
+            Node<?> currentHead = head;
+            //current head has no next pointer and is therefor empty.
+            //no modifications by this call, therefor false.
+            if (head.next == null) return false;
+
+            //Only return true if cassing the new node was successful. Any modifications to the head means other
+            //threads are clearing concurrently, just spin and see if the head is empty.
+            Node<E> newHead = new Node<E>(null);
+            if (UNSAFE.compareAndSwapObject(this, headOffset, currentHead, newHead)) {
+                return true;
+            }
+        }
     }
 
     private final class NodeIterator implements Iterator<E> {
+        private Node<E> prev;
+        private Node<E> curr;
         private Node<E> next;
 
 
         private NodeIterator() {
-            next = head.next;
+            curr = head;
+            next = curr.next;
         }
 
         @Override
@@ -196,19 +250,25 @@ public class ConcurrentCollection<E> implements Collection<E> {
 
         @Override
         public E next() {
-            E value = next.value;
+            prev = curr;
+            curr = next;
             next = next.next; //yes, I just did that!
-            return value;
+
+
+            //I am ignoring zombie(deleted values), assuming iteration is normally rather fast
+            //and therefor poses no problem since we just assume deletion came after the read.
+            //but if time between hasNext() and next() is a considerable amount this might produce
+            //wrong results.
+            //considering a different approach in the future
+            return curr.value;
         }
 
         @Override
         public void remove() {
-            //can be very costly since we don't want to remove a value but an exact node.
-            //the previous node can be removed concurrently all the time. Which means we have to
-            //search for the previous node of this node.
-            //therefor preferring deleting values only.
-            //should support this though
-            throw new UnsupportedOperationException();
+            if (prev == null) {
+                throw new IllegalStateException("Iterator has not advanced yet");
+            }
+            ConcurrentCollection.this.removeNode(curr, prev);
         }
     }
 
@@ -231,16 +291,7 @@ public class ConcurrentCollection<E> implements Collection<E> {
             return UNSAFE.compareAndSwapObject(this, nextOffset, expected, newNode);
         }
 
-        static final long nextOffset;
-        static final long stateOffset;
-
-        static {
-            try {
-                nextOffset = UNSAFE.objectFieldOffset(Node.class.getDeclaredField("next"));
-                stateOffset = UNSAFE.objectFieldOffset(Node.class.getDeclaredField("state"));
-            } catch (Exception e) {
-                throw new Error(e);
-            }
-        }
+        static final long nextOffset = UnsafeProvider.objectFieldOffsetFor(Node.class, "next");
+        static final long stateOffset = UnsafeProvider.objectFieldOffsetFor(Node.class, "state");
     }
 }

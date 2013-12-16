@@ -18,6 +18,14 @@ public class UnsafeProvider {
         return UNSAFE;
     }
 
+    public static long objectFieldOffsetFor(Class<?> clazz, String field) {
+        try {
+            return instance().objectFieldOffset(clazz.getDeclaredField(field));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     @NotNull
     private static Unsafe extractInstance() {
         try {

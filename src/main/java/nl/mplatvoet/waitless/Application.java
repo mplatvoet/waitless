@@ -1,15 +1,90 @@
 package nl.mplatvoet.waitless;
 
 import nl.mplatvoet.waitless.collections.ConcurrentCollection;
+import nl.mplatvoet.waitless.misc.Stopwatch;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 public class Application {
+    private static final Logger log = LoggerFactory.getLogger(Application.class);
 
-    public static final int LENGTH = 10000000;
+    public static final int LENGTH = 100000;
 
     public static void main(String[] args) throws InterruptedException {
+        log.info("run test with ConcurrentCollection");
         Collection<Integer> ints = new ConcurrentCollection<Integer>();
+        runTest(ints);
+        ints = new ConcurrentCollection<Integer>();
+        runTest(ints);
+        ints = new ConcurrentCollection<Integer>();
+        runTest(ints);
+
+        log.info("run test with ConcurrentLinkedDeque");
+        ints = new ConcurrentLinkedDeque<Integer>();
+        runTest(ints);
+        ints = new ConcurrentLinkedDeque<Integer>();
+        runTest(ints);
+        ints = new ConcurrentLinkedDeque<Integer>();
+        runTest(ints);
+
+        log.info("run test with ConcurrentCollection");
+        ints = new ConcurrentCollection<Integer>();
+        runTest(ints);
+        ints = new ConcurrentCollection<Integer>();
+        runTest(ints);
+        ints = new ConcurrentCollection<Integer>();
+        runTest(ints);log.info("run test with ConcurrentLinkedDeque");
+        ints = new ConcurrentLinkedDeque<Integer>();
+        runTest(ints);
+        ints = new ConcurrentLinkedDeque<Integer>();
+        runTest(ints);
+        ints = new ConcurrentLinkedDeque<Integer>();
+        runTest(ints);
+
+        log.info("run test with ConcurrentCollection");
+        ints = new ConcurrentCollection<Integer>();
+        runTest(ints);
+        ints = new ConcurrentCollection<Integer>();
+        runTest(ints);
+        ints = new ConcurrentCollection<Integer>();
+        runTest(ints);log.info("run test with ConcurrentLinkedDeque");
+        ints = new ConcurrentLinkedDeque<Integer>();
+        runTest(ints);
+        ints = new ConcurrentLinkedDeque<Integer>();
+        runTest(ints);
+        ints = new ConcurrentLinkedDeque<Integer>();
+        runTest(ints);
+
+        log.info("run test with ConcurrentCollection");
+        ints = new ConcurrentCollection<Integer>();
+        runTest(ints);
+        ints = new ConcurrentCollection<Integer>();
+        runTest(ints);
+        ints = new ConcurrentCollection<Integer>();
+        runTest(ints);
+        log.info("run test with ConcurrentLinkedDeque");
+        ints = new ConcurrentLinkedDeque<Integer>();
+        runTest(ints);
+        ints = new ConcurrentLinkedDeque<Integer>();
+        runTest(ints);
+        ints = new ConcurrentLinkedDeque<Integer>();
+        runTest(ints);
+
+        log.info("run test with ConcurrentCollection");
+        ints = new ConcurrentCollection<Integer>();
+        runTest(ints);
+        ints = new ConcurrentCollection<Integer>();
+        runTest(ints);
+        ints = new ConcurrentCollection<Integer>();
+        runTest(ints);
+    }
+
+    private static void runTest(Collection<Integer> ints) throws InterruptedException {
+        Stopwatch stopwatch = new Stopwatch(log);
+
         Thread t1 = new IntFiller(LENGTH, ints);
         Thread t2 = new IntFiller(LENGTH, ints);
         Thread t3 = new IntFiller(LENGTH, ints);
@@ -33,10 +108,7 @@ public class Application {
         t3.join();
         t4.join();
 
-//        for (Integer anInt : ints) {
-//            System.out.println("anInt = " + anInt);
-//        }
-        System.out.println("ints = " + ints.size());
+        stopwatch.elapsed("result #{}", ints.size());
     }
 
 
@@ -75,4 +147,5 @@ public class Application {
             }
         }
     }
+
 }
