@@ -6,7 +6,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedList;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class Application {
     private static final Logger log = LoggerFactory.getLogger(Application.class);
@@ -14,6 +17,12 @@ public class Application {
     public static final int LENGTH = 100000;
 
     public static void main(String[] args) throws InterruptedException {
+        for (int i = 0; i < 3; ++i) {
+            runTests();
+        }
+    }
+
+    public static void runTests() throws InterruptedException {
         log.info("run test with ConcurrentCollection");
         Collection<Integer> ints = new ConcurrentCollection<Integer>();
         runTest(ints);
@@ -30,55 +39,21 @@ public class Application {
         ints = new ConcurrentLinkedDeque<Integer>();
         runTest(ints);
 
-        log.info("run test with ConcurrentCollection");
-        ints = new ConcurrentCollection<Integer>();
-        runTest(ints);
-        ints = new ConcurrentCollection<Integer>();
-        runTest(ints);
-        ints = new ConcurrentCollection<Integer>();
-        runTest(ints);log.info("run test with ConcurrentLinkedDeque");
-        ints = new ConcurrentLinkedDeque<Integer>();
-        runTest(ints);
-        ints = new ConcurrentLinkedDeque<Integer>();
-        runTest(ints);
-        ints = new ConcurrentLinkedDeque<Integer>();
-        runTest(ints);
+//      Yes we know this is slow
+//        log.info("run test with Collections.synchronizedList(LinkedList())");
+//        ints = Collections.synchronizedList(new LinkedList<Integer>());
+//        runTest(ints);
+//        ints = Collections.synchronizedList(new LinkedList<Integer>());
+//        runTest(ints);
+//        ints = Collections.synchronizedList(new LinkedList<Integer>());
+//        runTest(ints);
 
-        log.info("run test with ConcurrentCollection");
-        ints = new ConcurrentCollection<Integer>();
+        log.info("run test with new ConcurrentLinkedQueue()");
+        ints = new ConcurrentLinkedQueue<Integer>();
         runTest(ints);
-        ints = new ConcurrentCollection<Integer>();
+        ints = new ConcurrentLinkedQueue<Integer>();
         runTest(ints);
-        ints = new ConcurrentCollection<Integer>();
-        runTest(ints);log.info("run test with ConcurrentLinkedDeque");
-        ints = new ConcurrentLinkedDeque<Integer>();
-        runTest(ints);
-        ints = new ConcurrentLinkedDeque<Integer>();
-        runTest(ints);
-        ints = new ConcurrentLinkedDeque<Integer>();
-        runTest(ints);
-
-        log.info("run test with ConcurrentCollection");
-        ints = new ConcurrentCollection<Integer>();
-        runTest(ints);
-        ints = new ConcurrentCollection<Integer>();
-        runTest(ints);
-        ints = new ConcurrentCollection<Integer>();
-        runTest(ints);
-        log.info("run test with ConcurrentLinkedDeque");
-        ints = new ConcurrentLinkedDeque<Integer>();
-        runTest(ints);
-        ints = new ConcurrentLinkedDeque<Integer>();
-        runTest(ints);
-        ints = new ConcurrentLinkedDeque<Integer>();
-        runTest(ints);
-
-        log.info("run test with ConcurrentCollection");
-        ints = new ConcurrentCollection<Integer>();
-        runTest(ints);
-        ints = new ConcurrentCollection<Integer>();
-        runTest(ints);
-        ints = new ConcurrentCollection<Integer>();
+        ints = new ConcurrentLinkedQueue<Integer>();
         runTest(ints);
     }
 

@@ -16,7 +16,6 @@ public class ConcurrentCollection<E> implements Collection<E> {
     private volatile Node<E> tail = head;
 
 
-    //TODO: Handle Zombie tails, endless loops in that case
     public boolean add(@NotNull E value) {
         Node<E> newTail = new Node<E>(value);
         newTail.state = Node.State.MUTATING;
@@ -30,6 +29,13 @@ public class ConcurrentCollection<E> implements Collection<E> {
                     return true;
                 }
                 oldTail.state = Node.State.AVAILABLE;
+            }
+            if (oldTail.state == Node.State.ZOMBIE && oldTail.casState(Node.State.ZOMBIE, Node.State.MUTATING)) {
+                //revive to MUTATING, so this is the only thread operating on the tail
+                Node<E> currentTail = head;
+                while(currentTail.next != null) currentTail = currentTail.next;
+                tail = currentTail; //might be a ZOMBIE too, but we'll find out later
+                oldTail.state = Node.State.ZOMBIE;
             }
         }
     }
